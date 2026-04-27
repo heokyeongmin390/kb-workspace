@@ -5,6 +5,7 @@ import { format, min, max, startOfDay } from "date-fns";
 import { Plus, Trash2, Edit2, X, Check, Calendar as CalendarIcon, CalendarOff } from "lucide-react";
 import { Memo } from "@/types";
 import { kbSchedule } from "@/lib/kbSchedule";
+import { fetchMemosFromServer, saveMemosToServer } from "@/app/actions";
 
 interface MemoListProps {
   selectedStartDate: Date;
@@ -22,7 +23,7 @@ const COLORS = [
   { name: "회색", value: "bg-gray-500" },
 ];
 
-export default function MemoList({ selectedStartDate, selectedEndDate, onMemosChanged, showKB }: MemoListProps) {
+export default function MemoList({ selectedStartDate, selectedEndDate, onMemosChanged, showKB = false }: MemoListProps) {
   const [allMemos, setAllMemos] = useState<Memo[]>([]);
   const [newMemo, setNewMemo] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -43,26 +44,38 @@ export default function MemoList({ selectedStartDate, selectedEndDate, onMemosCh
     : `${format(start, "M월 d일")} ~ ${format(end, "M월 d일")} 메모`;
 
   useEffect(() => {
-    const storageKey = showKB ? "all-memos-kb" : "all-memos-normal";
-    const saved = localStorage.getItem(storageKey);
-    let parsed: Memo[] = [];
-    if (saved) {
-      parsed = JSON.parse(saved);
-    }
-    
-    if (showKB) {
-      setAllMemos([...parsed, ...kbSchedule]);
-    } else {
-      setAllMemos(parsed);
-    }
+    const loadMemos = async () => {
+      const { memos: serverMemos, configured } = await fetchMemosFromServer(showKB);
+      let parsed: Memo[] = [];
+      if (configured) {
+        parsed = serverMemos;
+      } else {
+        const storageKey = showKB ? "all-memos-kb" : "all-memos-normal";
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          parsed = JSON.parse(saved);
+        }
+      }
+      
+      if (showKB) {
+        setAllMemos([...parsed, ...kbSchedule]);
+      } else {
+        setAllMemos(parsed);
+      }
+    };
+    loadMemos();
   }, [showKB]);
 
-  const saveMemos = (newMemos: Memo[]) => {
-    const storageKey = showKB ? "all-memos-kb" : "all-memos-normal";
+  const saveMemos = async (newMemos: Memo[]) => {
     // filter out kb- prefixed memos before saving to local storage
     const userMemos = newMemos.filter(m => !m.id.startsWith("kb-"));
     setAllMemos(newMemos);
-    localStorage.setItem(storageKey, JSON.stringify(userMemos));
+    
+    const { configured } = await saveMemosToServer(userMemos, showKB);
+    if (!configured) {
+      const storageKey = showKB ? "all-memos-kb" : "all-memos-normal";
+      localStorage.setItem(storageKey, JSON.stringify(userMemos));
+    }
     onMemosChanged();
   };
 

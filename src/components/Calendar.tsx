@@ -19,6 +19,7 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Memo } from "@/types";
 import { kbSchedule } from "@/lib/kbSchedule";
+import { fetchMemosFromServer } from "@/app/actions";
 
 interface CalendarProps {
   selectedStartDate: Date;
@@ -40,18 +41,26 @@ export default function Calendar({
   const [dragAnchor, setDragAnchor] = useState<Date | null>(null);
 
   useEffect(() => {
-    const storageKey = showKB ? "all-memos-kb" : "all-memos-normal";
-    const saved = localStorage.getItem(storageKey);
-    let parsed: Memo[] = [];
-    if (saved) {
-      parsed = JSON.parse(saved);
-    }
-    
-    if (showKB) {
-      setAllMemos([...parsed, ...kbSchedule]);
-    } else {
-      setAllMemos(parsed);
-    }
+    const loadMemos = async () => {
+      const { memos: serverMemos, configured } = await fetchMemosFromServer(showKB);
+      let parsed: Memo[] = [];
+      if (configured) {
+        parsed = serverMemos;
+      } else {
+        const storageKey = showKB ? "all-memos-kb" : "all-memos-normal";
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          parsed = JSON.parse(saved);
+        }
+      }
+      
+      if (showKB) {
+        setAllMemos([...parsed, ...kbSchedule]);
+      } else {
+        setAllMemos(parsed);
+      }
+    };
+    loadMemos();
   }, [refreshKey, showKB]);
 
   useEffect(() => {
